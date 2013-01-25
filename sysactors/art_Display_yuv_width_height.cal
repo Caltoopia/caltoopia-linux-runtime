@@ -1,0 +1,127 @@
+import all caltrop.lib.BitOps;
+import ptolemy.media.Picture;
+import javax.swing.JFrame;
+
+//
+// Displays YUV macro blocks and allows the dimension of each frame
+// to vary.
+//
+// width and height is the dimension (in pixels) of the display window 
+// WIDTH and HEIGHT ports provide the dimension (in 16x16 macro blocks)
+// of each frame.
+//
+// Input format: 
+//      384*WIDTH_IN_MB*HEIGHT_IN_MB tokens/frame
+//      The 384 tokens of a macro block are divided into 6 components,
+//      each of which consists of 8x8 tokens: Y0,Y1,Y2,Y3,U and V:
+//
+//      Y0 | Y1
+//      -------,   the U and V components are downsampled (8x8 tokens
+//      Y2 | Y3    represent the entire macro block)
+
+actor art_Display_yuv_width_height (string title, 
+                                    int width, 
+                                    int height) 
+
+                   int In, 
+                   int(size=16) WIDTH,
+                   int(size=16) HEIGHT  ==> :
+
+  int maxXAcross = width;
+  int maxYOver   = height;
+
+  int START_Y = 0;
+  int START_U = 4*64;
+  int START_V = 5*64;
+  int MB_SIZE = 6*64;
+
+  picture := Picture(maxXAcross, maxYOver);
+  frame = JFrame(title);
+  List[int(size=9)] macroBlock := [0: for i in 1..MB_SIZE];
+
+  int xAcross := 0;
+  int yOver   := 0;
+  int mbx:=0;
+  int mby:=0;
+  int comp:=0;
+
+  procedure display_mb()
+  begin
+    for j in 0..7,
+      for k in 0..7
+      var
+        int i = 8*j + k,
+        int tu  = macroBlock[START_U+i] - 128,
+        int tv  = macroBlock[START_V+i] - 128,
+        int ruv =            104597*tv,
+        int guv = -25675*tu + 53279*tv,
+        int buv = 132202*tu
+      do
+        for dj in 0..1,
+          for dk in 0..1
+          var
+            int jj = 2*j + dj,
+            int kk = 2*k + dk,
+            int y = macroBlock[16*jj + kk],
+            int t = (76306*(y-16))+32768,
+            int r = rshift(t+ruv, 16),
+            int g = rshift(t+guv, 16),
+            int b = rshift(t+buv, 16)
+          do
+            picture.setPixel(mby+jj, mbx+kk, r, g, b); 
+        end      
+    end
+    picture.displayImage();
+  end
+
+  initialize ==>
+  do
+    frame.getContentPane().add(picture);
+    frame.pack();
+    frame.setVisible(true);
+  end
+
+  startFrame: action WIDTH:[w], HEIGHT:[h] ==>
+  guard mby=yOver
+  do
+    xAcross:=16*w;
+    yOver:=16*h;
+    mby:=0;
+  end
+
+  read: action In:[byte] repeat 64 ==>
+  var
+    int start = if (comp=1) or (comp=3) then (comp-1)*64 + 8 else comp*64 end,
+    int i:=0
+  do
+    if (mbx<maxXAcross) and (mby<maxYOver) then
+      while i<64 do
+        macroBlock[start+i] := byte[i];
+	i:=i+1;
+	if (bitand(i,7)=0) and (comp<4) then
+	  // Compensate for the interleaved Y0,Y1,Y2,Y3
+	  start:=start+8;
+	end
+      end
+
+      if comp=5 then
+        display_mb();
+      end
+    end
+
+    if comp<5 then
+      comp:=comp+1;
+    else
+      comp:=0;
+      mbx:=mbx+16;
+      if mbx=xAcross then
+        mbx:=0;
+	mby:=mby+16;
+      end
+    end
+  end
+
+  priority
+    startFrame > read;
+  end
+end

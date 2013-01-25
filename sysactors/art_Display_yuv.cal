@@ -1,0 +1,126 @@
+import all caltrop.lib.BitOps;
+import ptolemy.media.Picture;
+import javax.swing.JFrame;
+
+//
+// Displays YUV macro blocks
+//
+// Input format: 
+//      384*WIDTH_IN_MB*HEIGHT_IN_MB tokens/frame
+//      The 384 tokens of a macro block are divided into 6 components,
+//      each of which consists of 8x8 tokens: Y0,Y1,Y2,Y3,U and V:
+//
+//      Y0 | Y1
+//      -------,   the U and V components are downsampled (8x8 tokens
+//      Y2 | Y3    represent the entire macro block)
+
+actor art_Sink_yuv (string title, 
+                    int WIDTH_IN_MB, 
+                    int HEIGHT_IN_MB) 
+
+                   int In ==> int Out :
+
+  int xAcross = 16*WIDTH_IN_MB;
+  int yOver   = 16*HEIGHT_IN_MB;
+
+  int START_Y = 0;
+  int START_U = 4*64;
+  int START_V = 5*64;
+  int MB_SIZE = 6*64;
+
+  picture := Picture(xAcross, yOver);
+  frame = JFrame(title);
+  List[int(size=9)] macroBlock := [0: for i in 1..MB_SIZE];
+
+  int mbx:=0;
+  int mby:=0;
+  int count:=0;
+  int comp:=0;
+  int start:=0;
+
+  procedure display_mb()
+  begin
+    for j in 0..7,
+      for k in 0..7
+      var
+        int i = 8*j + k,
+        int tu  = macroBlock[START_U+i] - 128,
+        int tv  = macroBlock[START_V+i] - 128,
+        int ruv =            104597*tv,
+        int guv = -25675*tu + 53279*tv,
+        int buv = 132202*tu
+      do
+        for dj in 0..1,
+          for dk in 0..1
+          var
+            int jj = 2*j + dj,
+            int kk = 2*k + dk,
+            int y = macroBlock[16*jj + kk],
+            int t = (76306*(y-16))+32768,
+            int r = rshift(t+ruv, 16),
+            int g = rshift(t+guv, 16),
+            int b = rshift(t+buv, 16)
+          do
+            picture.setPixel(mby+jj, mbx+kk, r, g, b); 
+            println("("+(mbx+kk)+","+(mby+jj)+") "+y+" "+tu+" "+tv+" "+r+" "+g+" "+b);
+        end      
+    end;
+    picture.displayImage();
+  end
+
+  initialize ==>
+  do
+    frame.getContentPane().add(picture);
+    frame.pack();
+    frame.setVisible(true);
+  end
+
+  read: action In:[byte] ==>
+  do
+    macroBlock[start+count] := byte;
+    count := count + 1;
+
+    if (comp<4) and (bitand(count, 7)=0) then
+      // new line, compensate for interleaving of Y-components
+      start := start + 8;
+    end
+  end
+
+  done.comp: action ==>
+  guard 
+    count=64
+  do
+    count:=0;
+    comp:=comp+1;
+    if (comp=1) or (comp=3) then
+      start:=(comp-1)*64+8;
+    else
+      start:=comp*64;
+    end
+  end
+
+  done.mb: action ==>
+  guard
+    count=64,
+    comp=5
+  do
+    display_mb();
+
+    count:=0;
+    comp:=0;
+    start:=0;
+
+    mbx:=mbx+16;
+    if mbx>=xAcross then
+      mbx:=0;
+      mby:=mby+16;
+      if mby>=yOver then
+        mby:=0;
+      end
+    end
+  end
+
+  priority
+    done.mb > done.comp > read;
+  end
+end

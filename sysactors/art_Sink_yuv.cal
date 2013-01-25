@@ -1,0 +1,154 @@
+import java.io.FileOutputStream;
+import all caltrop.lib.BitOps;
+
+//
+// Writes YUV macro blocks to file
+//
+// Input format: 
+//      384*WIDTH_IN_MB*HEIGHT_IN_MB tokens/frame
+//      The 384 tokens of a macro block are divided into 6 components,
+//      each of which consists of 8x8 tokens: Y0,Y1,Y2,Y3,U and V:
+//
+//      Y0 | Y1
+//      -------,   the U and V components are downsampled (8x8 tokens
+//      Y2 | Y3    represent the entire macro block)
+//
+// Output format:
+//      A binary file of 384*WIDTH_IN_MB*HEIGHT_IN_MB bytes/frame
+//      Each frame is divided into Y,U and V components. The first 
+//      section of the frame (Y-values) is four times as large as each
+//      of the two following sections (U- and V-values). Each section
+//      is organized in lines: 16*WIDTH_IN_MB Y-values (8*WIDTH_IN_MB
+//      U/V-values). There are 16*HEIGHT_IN_MB lines of Y-values 
+//      (8*HEIGHT_IN_MB lines of U/V-values)
+
+actor art_Sink_yuv (string fileName, 
+                    int WIDTH_IN_MB, 
+                    int HEIGHT_IN_MB) 
+                   int In ==> :
+
+  FileOutputStream out:=FileOutputStream(fileName);
+
+  int yAcross  = 16*WIDTH_IN_MB;
+  int uvAcross = rshift(yAcross,1); // downsampled to 8x8 pixels/macro block
+  int uvDown   = 8*HEIGHT_IN_MB;
+
+  int yLineSize = 16*yAcross;        // one "line" of macro blocks (Y)
+  int uvLineSize = 8*uvAcross;
+  int uvFrameSize = uvAcross*uvDown; // one frame worth of U and V components
+
+  list[int(size=8)] yLine  = [ 0 : for i in Integers(1, yLineSize) ];
+  list[int(size=8)] uFrame = [ 0 : for i in Integers(1, uvFrameSize) ];
+  list[int(size=8)] vFrame = [ 0 : for i in Integers(1, uvFrameSize) ];
+
+  // Example: a QCIF picture has 
+  // WIDTH_IN_MB =11
+  // HEIGHT_IN_MB=9
+  // yAcross     =11*16 = 176
+  // uvAcross    =11*8  =  88
+  // uvDown      =9*8   =  72
+  // yLineSize   =16*176=2816
+  // uvLineSize  =8*88=704
+  // uvFrameSize =88*72 =6336
+  //
+  // The resulting output is organized in frames
+  // First HEIGHT_IN_MB (9) "yLines": 9*2816=25344 bytes
+  // followed by the uFrame and the vFrame: 2*6336 bytes
+  // -a total of 38016 bytes/frame
+
+  int START_Y0 =   0;
+  int START_Y1 =  64;
+  int START_Y2 = 128;
+  int START_Y3 = 192;
+  int START_U  = 256;
+  int START_V  = 320;
+
+  // xxx,yyy are the coordinates 0..7 within each sub-block.
+
+  int XXX_MASK =0x07;
+  int YYY_MASK =0x38;
+  int Y_SHIFT  =   3;
+
+  int SUBBLOCK_MASK=bitor(XXX_MASK,YYY_MASK);
+
+  // Start addresses into yLine, uFrame and vFrame are
+  // maintained when reading the macro blocks:
+
+  int mbStartY  := 0;
+  int mbStartUV := 0;
+  int comp      := 0;
+
+  read.y: action In:[ data ] repeat 64 ==>
+  /* guard comp < 4 */
+  var
+    int yOffset=if bitand(comp,2)!=0 then 8*yAcross else 0 end,
+    int xOffset=if bitand(comp,1)!=0 then 8 else 0 end,
+    int start=mbStartY + yOffset + xOffset
+  do
+    for j in 0..7, 
+      for k in 0..7 do
+        yLine[start + j*yAcross + k] := data[j*8 + k];
+    end;
+    comp := comp + 1;
+  end
+
+  read.u: action In:[ data ] repeat 64 ==>
+  guard
+    comp = 4
+  do
+    for j in 0..7,
+      for k in 0..7 do
+        uFrame[mbStartUV + j*uvAcross + k] := data[j*8 + k];
+    end;
+    comp := comp + 1;
+  end
+
+  read.v: action In:[ data ] repeat 64 ==>
+  do
+    for j in 0..7,
+      for k in 0..7 do
+        vFrame[mbStartUV + j*uvAcross + k] := data[j*8 + k];
+    end;
+
+    comp := 0;
+    mbStartY := mbStartY + 16;
+    mbStartUV := mbStartUV + 8;
+    
+    if mbStartY >= yAcross then
+      // Output one line of Y macro blocks
+      for i in 0..(yLineSize-1) do
+        out.write(yLine[i]);
+      end; 
+
+      mbStartY := 0;
+      mbStartUV := mbStartUV - uvAcross + uvLineSize;
+
+      if mbStartUV >= uvFrameSize then
+        // Output one frame worth of U and V components
+        for i in 0..(uvFrameSize-1) do
+          out.write(uFrame[i]);
+        end;
+
+        for i in 0..(uvFrameSize-1) do
+          out.write(vFrame[i]);
+        end;
+        out.flush();
+
+        mbStartUV:=0;
+      end
+
+    end
+
+  end
+
+  priority
+    read.u > read.y;
+  end
+
+  schedule fsm start :
+    start (read.y) --> start;
+    start (read.u) --> readV;
+    readV (read.v) --> start;
+  end
+
+end

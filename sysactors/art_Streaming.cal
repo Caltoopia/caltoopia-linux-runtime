@@ -1,0 +1,16 @@
+// Receive streaming tokens (bytes) from network
+
+actor art_Streaming( int port) ==> int Out :
+
+  int nextC := readByte();
+
+  action ==> Out:[v]
+  guard
+    nextC >= 0
+  var
+    int v
+  do
+     v:=nextC;
+     nextC:=readByte();
+  end
+end

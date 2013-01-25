@@ -1,0 +1,17 @@
+// Reads integer tokens (bytes) from a binary file
+
+actor art_Source_bin( string fileName ) ==> int Out :
+
+  fd = openFile(fileName);
+  int nextC := readByte(fd);
+
+  action ==> Out:[v]
+  guard
+    nextC >= 0
+  var
+    int v
+  do
+     v:=nextC;
+     nextC:=readByte(fd);
+  end
+end

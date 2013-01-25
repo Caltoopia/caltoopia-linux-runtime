@@ -1,0 +1,14 @@
+import java.io.File;
+import java.util.Scanner;
+
+// Reads integer tokens from a text file
+
+actor art_Source_txt(string fileName) ==> int Out:
+
+        File input:=File(fileName);
+        Scanner scanner:=Scanner(input);
+        
+	action ==> [scanner.nextInt()]
+        guard scanner.hasNextInt()
+	end
+end

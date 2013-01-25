@@ -1,0 +1,7 @@
+*.o
+*.svn
+*~
+*.a
+include
+share
+lib

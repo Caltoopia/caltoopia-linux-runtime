@@ -1,0 +1,14 @@
+import java.io.FileOutputStream;
+
+// Writes integer tokens (bytes) to a binary file
+
+actor art_Sink_bin (string fileName) int In ==>  : 
+ 
+  FileOutputStream out:=FileOutputStream(fileName);
+
+  action In:[ byte ] ==>
+  do
+    out.write(byte);
+  end
+
+end

@@ -1,0 +1,13 @@
+import java.io.PrintStream;
+
+// Writes real tokens to a text file
+
+actor art_Sink_txt(string fileName) In ==> :
+
+	PrintStream out:=PrintStream(fileName);
+	
+	action [x] ==> 
+	do
+		out.println(x.toString());
+	end
+end
