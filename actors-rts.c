@@ -50,6 +50,9 @@ static int arg_loopmax = INT_MAX;
 
 int numActiveActors=0;
 
+void (*cb_add_threads)(int)=0;
+void (*cb_register_thread)(int)=0;
+
 static struct {
   int num_outputs;
   int num_inputs;
@@ -1038,6 +1041,9 @@ static void run_threads(cpu_runtime_data_t *runtime,
 		   &runtime[i]);
   }
 
+  if(cb_add_threads)
+    cb_add_threads(runtime->cpu_count+1);
+
   for (i = 0 ; i < runtime->cpu_count ; i++) {
     pthread_join(runtime[i].thread, NULL);
   }
@@ -1314,8 +1320,13 @@ int executeNetwork(int argc,
     if (generate_trace)
       enable_tracing(runtime_data, numInstances, argv[0]);
 
+    if(cb_register_thread)
+      cb_register_thread(0);
+
     if (nr_of_cpus(&used_cpus) == 1) {
       flags |= FLAG_SINGLE_CPU;
+      if(cb_add_threads)
+	cb_add_threads(0);  
     }
     switch (flags) {
       case 0: {
