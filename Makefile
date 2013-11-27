@@ -33,7 +33,7 @@ INSTALL_SYSACTORS=art_DDRModel.cal art_Display_yuv.cal art_Sink_yuv.cal \
                   art_Streaming.cal art_Display_yuv_width_height.cal
 
 INSTALL_C_SRC=display.h display-fb.c display-sdl.c display-gtk.c display-null.c \
-              internal.h xmlParser.h
+              display-file.c internal.h xmlParser.h
 
 OBJECTS=actors-rts.o xmlParser.o xmlTrace.o termination-report.o \
         art_Sink_bin.o art_Sink_txt.o art_Sink_real.o \
