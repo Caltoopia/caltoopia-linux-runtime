@@ -221,6 +221,21 @@ static int terminate;
 #undef MUTEX_LOCK
 #undef MUTEX_UNLOCK
 
+#ifdef __APPLE__
+typedef int cpu_set_t;
+#define CPU_ZERO(cpu)
+#define CPU_SET(a,b)
+#define CPU_SETSIZE 1
+#define CPU_ISSET(i,b) ((i==0)?1:0)
+int sched_getaffinity(int a, size_t sz, cpu_set_t* aff) {
+  aff=0;
+  return 1;
+}
+int sched_setaffinity(int a, size_t sz, cpu_set_t* aff) {
+  return 1;
+}
+#endif
+
 /* 
  * We need to know processor affinity, etc before we allocate the true 
  * datastructures. For now we collect the actor layout in dummy objects
