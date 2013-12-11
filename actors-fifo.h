@@ -1,6 +1,12 @@
+#ifdef REF
+#undef FIFO_NAME
+#define FIFO_NAME(f) f##_##ref
+#define FIFO_TYPE void*
+#else
 #define FIFO_NAME_3(f,t) f##_##t
 #define FIFO_NAME_2(f,t) FIFO_NAME_3(f, t)
 #define FIFO_NAME(f) FIFO_NAME_2(f, FIFO_TYPE)
+#endif
 
 static inline unsigned FIFO_NAME(pinAvailIn)(const LocalInputPort *p) 
 {

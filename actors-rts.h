@@ -375,6 +375,10 @@ extern void setParameterBytes(AbstractActorInstance *pInstance,
 #include "actors-fifo.h"
 #undef FIFO_TYPE
 #undef BYTES
+#define REF
+#include "actors-fifo.h"
+#undef FIFO_TYPE
+#undef REF
 
 // Define uint32_t FIFO operations in terms of int32_t operations
 #define pinAvailIn_uint32_t(port)   pinAvailIn_int32_t(port) 
